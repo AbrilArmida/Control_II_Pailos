@@ -1,0 +1,89 @@
+//Se declaran las librerias
+#include <Wire.h>
+#include <Servo.h>
+
+
+
+//Se declaran las entradas y/o salidas
+int Analog_in = A0;                           //Entrada analógica para la señal del sensor
+Servo myservo;                                // Se crea un objeto servo
+
+//Se declaran las variables 
+int Read = 0;
+float distancia = 0.0;
+
+float bucle, time, tiempoPrev;                //Variables de tiempo para el control
+float distancia_previa_error, distancia_error;
+int periodo = 50;                            //Se resetea el periodocada 50ms
+
+
+///////////////////Constantes PID///////////////////////
+float kp=8; 
+float ki=0.7;
+float kd=3100; 
+float distancia_ideal = 16;           //Distancia desde el sensor hasta elcentro de la barra en cm
+float PID_p, PID_i, PID_d, PID_total;
+
+
+void setup() {
+ 
+  Serial.begin(9600);  
+  myservo.attach(9);                    //La señal del servo entrará por el pin 9
+  myservo.write(125);                   //Se coloca el sevo a 125º, para que la barra se encuentre recta
+  pinMode(Analog_in,INPUT);  
+  time = millis();
+}
+
+void loop() {
+  if (millis() > time+periodo)
+  {
+    time = millis();    
+    distancia = get_dist(100);           //Toma  el  promedio de 100 muestras
+    distancia_error = distancia - distancia_ideal;   
+    PID_p = kp * distancia_error;
+    float dist_diferencia = distancia_error - distancia_previa_error;     
+    PID_d = kd*((distancia_error - distancia_previa_error)/periodo);
+      
+    if(-3 < distancia_error && distancia_error < 3)
+    {
+      PID_i = PID_i + (ki * distancia_error);
+    }
+    else
+    {
+      PID_i = 0;
+    }
+  
+    PID_total = PID_p + PID_i + PID_d;  
+    PID_total = map(PID_total, -150, 150, 0, 150);
+  
+    if(PID_total < 20){PID_total = 20;}
+    if(PID_total > 160) {PID_total = 160; } 
+  
+    myservo.write(PID_total+30);  
+    distancia_previa_error = distancia_error;
+
+    Serial.print ("\n");
+    Serial.print ("Distancia: ");
+    Serial.print (distancia);
+    Serial.print ("\n");
+    Serial.print ("Error: ");
+    Serial.print ( distancia_error);
+    Serial.print ("\n");
+    
+    
+  }
+}
+
+float get_dist(int n)
+{
+  float sum=analogRead(Analog_in);
+  float distancia_cm = -50*log(0.00148301*sum);
+
+//El rango del sensor es a partir de 10 cm, por lo que se descartan los valores inferiores
+  if(distancia_cm<=12)
+  {
+      distancia_cm=7;
+  }
+      
+  return(distancia_cm);
+}
